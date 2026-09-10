@@ -4,6 +4,8 @@ A real OpenStreetMap map, redrawn in your own style, with the walking routes act
 
 ![Sforza Castle, Milan: Parco Sempione highlighted, the walk to the Duomo and the ride to Porta Garibaldi drawn](example/preview.png)
 
+**[▶ Watch the animated demo](https://ioluca.github.io/osm-walkmap/example/demo.html)** — Milan, 9:16, the routes drawing themselves. One HTML file, no libraries.
+
 You give it a point and a few destinations. It gives you a layered SVG you can style with CSS and animate with `stroke-dashoffset`, plus a JSON with the distance and the walking minutes to each destination, measured on the real pedestrian network.
 
 **Standard library only.** No pip install, no geospatial stack, no API key. One file, ~250 lines.
@@ -77,7 +79,7 @@ One warning learned the hard way: if your stylesheet sets `stroke-dasharray` wit
 
 Add `--demo` (and optionally `--title "Town"`) and you also get **`demo.html`**: a single self-contained page, no libraries, that does the whole opening for you. The camera settles on the pin, the routes draw themselves shortest first, each label appears when its route arrives, the title fades in at the end. Open it in any browser; there is a replay button. It is a preview and a reference implementation, not a video renderer: for the real thing take the same SVG into your motion tool.
 
-Try it on the example: `open example/demo.html`.
+The example is live at **[ioluca.github.io/osm-walkmap/example/demo.html](https://ioluca.github.io/osm-walkmap/example/demo.html)**, or `open example/demo.html` locally.
 
 ## Options
 
