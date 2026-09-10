@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The map data this tool retrieves is © OpenStreetMap contributors and is licensed
-under the Open Database License (ODbL): https://www.openstreetmap.org/copyright
-The MIT licence above covers this source code only, not the data you download
-with it, and not anything you produce from that data.

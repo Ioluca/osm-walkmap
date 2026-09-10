@@ -110,7 +110,7 @@ If you need serious network analysis, use OSMnx. If you want a poster on your wa
 
 ## Licence and attribution
 
-Code: [MIT](LICENSE), © 2026 Luca Cazzaniga. Written with AI assistance (Claude).
+Code: [MIT](LICENSE), © 2026 Luca Cazzaniga. Written with AI assistance (Claude). The MIT licence covers this source code only, not the data you download with it, and not what you produce from that data: see [NOTICE](NOTICE).
 
 Map data: © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/). This is not optional and it does not stop at this repository: anything you publish that is derived from this output has to carry the attribution visibly. In a video, a line in a corner is enough. See the [OSM copyright page](https://www.openstreetmap.org/copyright).
 
