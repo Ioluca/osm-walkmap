@@ -1,4 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1800 -1800 3600 3600" id="osm-map">
+<!doctype html><html><head><meta charset="utf-8"><title>Milan</title>
+<style>
+html,body{margin:0;height:100%;background:#06090b;font-family:Helvetica,Arial,sans-serif;color:#fff7ea;display:flex;align-items:center;justify-content:center}
+#frame{position:relative;aspect-ratio:9/16;height:100vh;max-width:100vw;overflow:hidden;background:radial-gradient(70% 55% at 50% 45%,#16232c,#080d11)}
+#cam{position:absolute;inset:0;transform-origin:var(--ox) var(--oy);transform:scale(1.35)}
+#cam svg{position:absolute;inset:0;width:100%;height:100%}
+#osm-map .route{stroke-dasharray:none;stroke:#fff7ea;stroke-width:12;stroke-linecap:round;stroke-linejoin:round}
+.pin{position:absolute;left:var(--ox);top:var(--oy);width:26px;height:26px;margin:-13px;border-radius:50%;background:#f0ae39;box-shadow:0 0 0 10px rgba(240,174,57,.25);opacity:0}
+.lab{position:absolute;transform:translate(-50%,-140%);white-space:nowrap;padding:8px 14px;border-radius:12px;background:rgba(13,21,25,.78);border:1px solid rgba(255,247,234,.3);font-size:15px;font-weight:700;opacity:0;transition:opacity .35s,transform .35s}
+.lab b{color:#f0ae39}
+#dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .6s;pointer-events:none}
+#title{position:absolute;left:0;right:0;top:44%;text-align:center;font-size:52px;font-weight:900;letter-spacing:-.02em;opacity:0;transition:opacity .5s;text-shadow:0 4px 30px rgba(0,0,0,.8)}
+#attr{position:absolute;right:14px;bottom:12px;font-size:12px;opacity:.6}
+#replay{position:absolute;left:14px;bottom:10px;font:13px Helvetica;color:#fff7ea;background:none;border:1px solid rgba(255,247,234,.4);border-radius:8px;padding:4px 10px;cursor:pointer;opacity:.7}
+</style></head><body><div id="frame"><div id="cam"><svg xmlns="http://www.w3.org/2000/svg" viewBox="-310 -1841 1589 2824" id="osm-map">
 <style>
 .field{fill:#121c1c;stroke:none}.green{fill:#15251e;stroke:none}.green-hero{fill:#1f4a35;stroke:#2f6b4c;stroke-width:4}.water{fill:none;stroke:#2f5f6b;stroke-width:6}.rail{fill:none;stroke:#3a4650;stroke-width:5;stroke-dasharray:22 12}
 .road-service{fill:none;stroke:#3c3a33;stroke-width:3}.path{fill:none;stroke:#4a4436;stroke-width:2.5;stroke-dasharray:8 7}
@@ -19,4 +33,29 @@
 <path id="route-0" class="route" d="M-20,8 L97,135 L124,133 L212,218 L234,218 L259,251 L258,300 L476,532 L700,656 L1000,660 L1000,675 L1013,675 L1032,711 L1012,737"/>
 <path id="route-1" class="route" d="M-20,8 L-78,-54 L-31,-98 L-36,-121 L-18,-194 L138,-342 L162,-381 L111,-766 L146,-780 L284,-791 L312,-818 L394,-795 L394,-866 L436,-857 L541,-1043 L552,-1095 L575,-1090 L625,-1312 L627,-1383 L651,-1414 L646,-1426 L673,-1441 L660,-1472 L614,-1507 L621,-1517 L590,-1534 L618,-1578"/>
 <path id="route-2" class="route" d="M-20,8 L85,122"/>
-</g></svg>
+</g></svg></div><div class="pin" id="pin"></div><div id="labels"></div>
+<div id="dim"></div><div id="title">Milan</div><div id="attr">&copy; OpenStreetMap contributors</div><button id="replay">replay</button></div>
+<script>
+const ROUTES=[{"index": 2, "label": "Parco Sempione", "minutes": 3, "mode": "walk", "point": [85.2870512526182, 122.22935999988124]}, {"index": 1, "label": "Porta Garibaldi station", "minutes": 11, "mode": "bike", "point": [632.3342015075444, -1580.7440000002707]}, {"index": 0, "label": "Duomo", "minutes": 20, "mode": "walk", "point": [968.0177899622626, 723.5799999995002]}];
+const svg=document.getElementById("osm-map"), frame=document.getElementById("frame"), cam=document.getElementById("cam");
+function toPx(x,y){const pt=svg.createSVGPoint();pt.x=x;pt.y=y;const s=pt.matrixTransform(svg.getScreenCTM());const r=frame.getBoundingClientRect();return [s.x-r.left,s.y-r.top];}
+function place(){cam.style.transform="none";const [ox,oy]=toPx(0,0);frame.style.setProperty("--ox",ox+"px");frame.style.setProperty("--oy",oy+"px");
+  ROUTES.forEach((r,i)=>{const el=document.getElementById("lab-"+i);if(!el)return;const [x,y]=toPx(r.point[0],r.point[1]);el.style.left=x+"px";el.style.top=y+"px";});}
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function tween(ms,fn){return new Promise(res=>{const t0=performance.now();(function f(now){const k=Math.min(1,(now-t0)/ms);fn(ease(k));k<1?requestAnimationFrame(f):res();})(t0);});}
+async function play(){
+  document.querySelectorAll(".lab").forEach(l=>{l.style.opacity=0;});document.getElementById("title").style.opacity=0;document.getElementById("dim").style.opacity=0;
+  const paths=ROUTES.map((r,i)=>svg.querySelector("#route-"+r.index)).filter(Boolean);
+  paths.forEach(p=>{const L=p.getTotalLength();p.style.strokeDasharray=L;p.style.strokeDashoffset=L;});
+  place(); cam.style.transform="scale(1.35)"; document.getElementById("pin").style.opacity=0;
+  await tween(300,()=>{});
+  document.getElementById("pin").style.opacity=1;
+  await tween(1100,k=>{cam.style.transform="scale("+(1.35-0.35*k)+")";});
+  for(let i=0;i<ROUTES.length;i++){const p=paths[i];if(!p)continue;const L=p.getTotalLength();
+    await tween(500+Math.min(1200,L/2),k=>{p.style.strokeDashoffset=L*(1-k);});
+    const el=document.getElementById("lab-"+i);if(el){el.style.opacity=1;el.style.transform="translate(-50%,-160%)";}
+    await tween(250,()=>{});}
+  await tween(400,()=>{});if(document.getElementById("title").textContent){document.getElementById("dim").style.opacity=.45;document.getElementById("title").style.opacity=1;}}
+ROUTES.forEach((r,i)=>{const d=document.createElement("div");d.className="lab";d.id="lab-"+i;d.innerHTML=r.label+" &middot; <b>"+r.minutes+" min "+(r.mode==="bike"?"bike":"walk")+"</b>";document.getElementById("labels").appendChild(d);});
+window.addEventListener("resize",place);document.getElementById("replay").onclick=play;play();
+</script></body></html>

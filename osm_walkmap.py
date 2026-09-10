@@ -25,6 +25,7 @@ import json
 import logging
 import math
 import os
+import re
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -239,6 +240,69 @@ def poly_d(points: list[tuple[float, float]], close: bool = False) -> str:
     d = "M" + " L".join(f"{x:.0f},{y:.0f}" for x, y in points)
     return d + (" Z" if close else "")
 
+DEMO_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</title>
+<style>
+html,body{margin:0;height:100%;background:#06090b;font-family:Helvetica,Arial,sans-serif;color:#fff7ea;display:flex;align-items:center;justify-content:center}
+#frame{position:relative;aspect-ratio:9/16;height:100vh;max-width:100vw;overflow:hidden;background:radial-gradient(70% 55% at 50% 45%,#16232c,#080d11)}
+#cam{position:absolute;inset:0;transform-origin:var(--ox) var(--oy);transform:scale(1.35)}
+#cam svg{position:absolute;inset:0;width:100%;height:100%}
+#osm-map .route{stroke-dasharray:none;stroke:#fff7ea;stroke-width:12;stroke-linecap:round;stroke-linejoin:round}
+.pin{position:absolute;left:var(--ox);top:var(--oy);width:26px;height:26px;margin:-13px;border-radius:50%;background:#f0ae39;box-shadow:0 0 0 10px rgba(240,174,57,.25);opacity:0}
+.lab{position:absolute;transform:translate(-50%,-140%);white-space:nowrap;padding:8px 14px;border-radius:12px;background:rgba(13,21,25,.78);border:1px solid rgba(255,247,234,.3);font-size:15px;font-weight:700;opacity:0;transition:opacity .35s,transform .35s}
+.lab b{color:#f0ae39}
+#dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .6s;pointer-events:none}
+#title{position:absolute;left:0;right:0;top:44%;text-align:center;font-size:52px;font-weight:900;letter-spacing:-.02em;opacity:0;transition:opacity .5s;text-shadow:0 4px 30px rgba(0,0,0,.8)}
+#attr{position:absolute;right:14px;bottom:12px;font-size:12px;opacity:.6}
+#replay{position:absolute;left:14px;bottom:10px;font:13px Helvetica;color:#fff7ea;background:none;border:1px solid rgba(255,247,234,.4);border-radius:8px;padding:4px 10px;cursor:pointer;opacity:.7}
+</style></head><body><div id="frame"><div id="cam">__SVG__</div><div class="pin" id="pin"></div><div id="labels"></div>
+<div id="dim"></div><div id="title">__TITLE__</div><div id="attr">&copy; OpenStreetMap contributors</div><button id="replay">replay</button></div>
+<script>
+const ROUTES=__ROUTES__;
+const svg=document.getElementById("osm-map"), frame=document.getElementById("frame"), cam=document.getElementById("cam");
+function toPx(x,y){const pt=svg.createSVGPoint();pt.x=x;pt.y=y;const s=pt.matrixTransform(svg.getScreenCTM());const r=frame.getBoundingClientRect();return [s.x-r.left,s.y-r.top];}
+function place(){cam.style.transform="none";const [ox,oy]=toPx(0,0);frame.style.setProperty("--ox",ox+"px");frame.style.setProperty("--oy",oy+"px");
+  ROUTES.forEach((r,i)=>{const el=document.getElementById("lab-"+i);if(!el)return;const [x,y]=toPx(r.point[0],r.point[1]);el.style.left=x+"px";el.style.top=y+"px";});}
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function tween(ms,fn){return new Promise(res=>{const t0=performance.now();(function f(now){const k=Math.min(1,(now-t0)/ms);fn(ease(k));k<1?requestAnimationFrame(f):res();})(t0);});}
+async function play(){
+  document.querySelectorAll(".lab").forEach(l=>{l.style.opacity=0;});document.getElementById("title").style.opacity=0;document.getElementById("dim").style.opacity=0;
+  const paths=ROUTES.map((r,i)=>svg.querySelector("#route-"+r.index)).filter(Boolean);
+  paths.forEach(p=>{const L=p.getTotalLength();p.style.strokeDasharray=L;p.style.strokeDashoffset=L;});
+  place(); cam.style.transform="scale(1.35)"; document.getElementById("pin").style.opacity=0;
+  await tween(300,()=>{});
+  document.getElementById("pin").style.opacity=1;
+  await tween(1100,k=>{cam.style.transform="scale("+(1.35-0.35*k)+")";});
+  for(let i=0;i<ROUTES.length;i++){const p=paths[i];if(!p)continue;const L=p.getTotalLength();
+    await tween(500+Math.min(1200,L/2),k=>{p.style.strokeDashoffset=L*(1-k);});
+    const el=document.getElementById("lab-"+i);if(el){el.style.opacity=1;el.style.transform="translate(-50%,-160%)";}
+    await tween(250,()=>{});}
+  await tween(400,()=>{});if(document.getElementById("title").textContent){document.getElementById("dim").style.opacity=.45;document.getElementById("title").style.opacity=1;}}
+ROUTES.forEach((r,i)=>{const d=document.createElement("div");d.className="lab";d.id="lab-"+i;d.innerHTML=r.label+" &middot; <b>"+r.minutes+" min "+(r.mode==="bike"?"bike":"walk")+"</b>";document.getElementById("labels").appendChild(d);});
+window.addEventListener("resize",place);document.getElementById("replay").onclick=play;play();
+</script></body></html>"""
+
+
+def write_demo(out: Path, svg_text: str, routes: list[dict[str, Any]], title: str) -> None:
+    """A dependency-free HTML page: camera settles on the pin, routes draw in turn, labels and title follow."""
+    xs = [0.0] + [r["point"][0] for r in routes if r.get("reachable")]
+    ys = [0.0] + [r["point"][1] for r in routes if r.get("reachable")]
+    m = 260.0
+    x0, x1, y0, y1 = min(xs) - m, max(xs) + m, min(ys) - m, max(ys) + m
+    w, h = x1 - x0, y1 - y0
+    if w / h < 9 / 16:            # fit a 9:16 frame around everything
+        cx, w = (x0 + x1) / 2, h * 9 / 16
+        x0 = cx - w / 2
+    else:
+        cy, h = (y0 + y1) / 2, w * 16 / 9
+        y0 = cy - h / 2
+    svg_text = re.sub(r'viewBox="[^"]*"', f'viewBox="{x0:.0f} {y0:.0f} {w:.0f} {h:.0f}"', svg_text, count=1)
+    seq = [{"index": i, "label": r["label"], "minutes": r["minutes"], "mode": r["mode"], "point": r["point"]}
+           for i, r in enumerate(routes) if r.get("reachable")]
+    seq.sort(key=lambda r: r["minutes"])
+    html = DEMO_HTML.replace("__SVG__", svg_text).replace("__ROUTES__", json.dumps(seq)).replace("__TITLE__", title or "")
+    (out / "demo.html").write_text(html, encoding="utf-8")
+    log.info("demo.html written: open it in a browser, routes draw shortest first")
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -250,6 +314,8 @@ def main() -> None:
     ap.add_argument("--target", action="append", default=[], help='"Label=lat,lon" or "Label=lat,lon:bike"')
     ap.add_argument("--target-boundary", action="append", default=[], help='"Label=key=value[:bike]" nearest reachable point of that area')
     ap.add_argument("--speed", default="", help='override speeds in km/h, e.g. "walk=5,bike=14"')
+    ap.add_argument("--demo", action="store_true", help="also write demo.html: the map with the routes drawing themselves, no dependencies")
+    ap.add_argument("--title", default="", help="title shown at the end of the demo (e.g. the town)")
     ap.add_argument("--area-full", action="append", default=[], help='exact OSM name of a park/area to fetch whole (not clipped by radius)')
     ap.add_argument("--tol", type=float, default=4.0, help="simplification tolerance (m)")
     args = ap.parse_args()
@@ -401,7 +467,10 @@ def main() -> None:
         if r.get("reachable"):
             svg.append(f'<path id="route-{i}" class="route" d="{poly_d(r["path"])}"/>')
     svg.append("</g></svg>")
-    (args.out / "map.svg").write_text("\n".join(svg), encoding="utf-8")
+    svg_text = "\n".join(svg)
+    (args.out / "map.svg").write_text(svg_text, encoding="utf-8")
+    if args.demo:
+        write_demo(args.out, svg_text, routes, args.title)
 
     meta = {"house": {"lat": args.lat, "lon": args.lon, "snap_m": round(min(snaps.values()) if snaps else 0)}, "radius": R, "speed_kmh": SPEED_KMH,
             "routes": [{k: v for k, v in r.items() if k != "path"} | {"path_points": len(r.get("path", []))} for r in routes],

@@ -55,6 +55,8 @@ Because the coordinate system is metres, placing a label is arithmetic, not gues
 
 The `example/` folder holds the output of the command above, run from the Sforza Castle in Milan. A dense city centre is the worst case for size: ten thousand footpaths make a 560 KB SVG even at `--tol 8`. A town is closer to 100 KB.
 
+**`demo.html`** (with `--demo`): the animated preview, see below.
+
 **`overpass.json`** is the cached raw response. Re-running is free and does not hit the API again; delete it to refresh.
 
 ## Animating it
@@ -71,6 +73,12 @@ gsap.to(path, {strokeDashoffset: 0, duration: 1.2, ease: "power1.inOut"});
 
 One warning learned the hard way: if your stylesheet sets `stroke-dasharray` with `!important`, it beats the inline value and every route appears fully drawn from frame zero.
 
+### `--demo`
+
+Add `--demo` (and optionally `--title "Town"`) and you also get **`demo.html`**: a single self-contained page, no libraries, that does the whole opening for you. The camera settles on the pin, the routes draw themselves shortest first, each label appears when its route arrives, the title fades in at the end. Open it in any browser; there is a replay button. It is a preview and a reference implementation, not a video renderer: for the real thing take the same SVG into your motion tool.
+
+Try it on the example: `open example/demo.html`.
+
 ## Options
 
 | Option | |
@@ -83,6 +91,7 @@ One warning learned the hard way: if your stylesheet sets `stroke-dasharray` wit
 | `--area-full "Exact name"` | fetch that area whole even if it extends past the radius, so a big park is not drawn as clipped shards. It also gets its own `green-hero` layer |
 | `--tol` | simplification tolerance in metres (default 4). This is what keeps the SVG around 100 KB instead of 2 MB |
 | `--speed "walk=4.5,bike=15"` | speeds in km/h, if the defaults do not fit your audience |
+| `--demo`, `--title "Town"` | also write `demo.html`, the animated preview |
 
 Destinations are snapped to the nearest **reachable** node of the graph, not simply the nearest one: a clipped fragment at the edge of the download would otherwise make a perfectly walkable target look unreachable. If that snap is more than 150 m the tool warns you, because it usually means the target sits outside `--radius`.
 

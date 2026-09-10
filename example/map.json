@@ -27,7 +27,7 @@
       "label": "Porta Garibaldi station",
       "mode": "bike",
       "reachable": true,
-      "metres": 2213,
+      "metres": 2212,
       "minutes": 11,
       "snap_m": 15,
       "point": [
@@ -52,15 +52,15 @@
   ],
   "layers": {
     "field": 2,
-    "green": 767,
+    "green": 766,
     "green-hero": 1,
-    "water": 26,
-    "rail": 1034,
-    "road-service": 877,
-    "path": 10064,
-    "road-minor": 2343,
-    "road-mid": 384,
-    "road-major": 430
+    "water": 27,
+    "rail": 1058,
+    "road-service": 864,
+    "path": 10148,
+    "road-minor": 2342,
+    "road-mid": 387,
+    "road-major": 428
   },
   "attribution": "© OpenStreetMap contributors (ODbL)"
 }
