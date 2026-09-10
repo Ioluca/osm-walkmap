@@ -34,9 +34,11 @@ log = logging.getLogger("osm_map")
 CONTACT = os.environ.get("OSM_CONTACT", "")
 UA = {"User-Agent": f"osm-walkmap/1.0 (+https://github.com/Ioluca/osm-walkmap{'; ' + CONTACT if CONTACT else ''})"}
 OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
-WALK_M_PER_MIN = 75.0  # 4.5 km/h
+SPEED_KMH = {"walk": 4.5, "bike": 15.0}   # override with --speed walk=4.5,bike=15
 
 NOT_WALKABLE = {"motorway", "motorway_link", "trunk", "trunk_link"}
+NOT_CYCLABLE = NOT_WALKABLE | {"steps"}
+FOOT_ONLY = {"footway", "pedestrian", "path"}   # closed to bikes unless tagged bicycle=yes/designated
 ROAD_CLASS = {
     "primary": "road-major", "primary_link": "road-major", "secondary": "road-major", "secondary_link": "road-major",
     "tertiary": "road-mid", "tertiary_link": "road-mid", "residential": "road-minor", "unclassified": "road-minor",
@@ -89,14 +91,35 @@ out geom;"""
     return overpass(q)
 
 
-def build_graph(ways: list[dict[str, Any]]) -> tuple[dict[int, tuple[float, float]], dict[int, list[tuple[int, float]]]]:
-    """Pedestrian graph: node id -> (lat, lon); adjacency with metre lengths."""
+def edge_speed_kmh(tags: dict[str, str], mode: str) -> float | None:
+    """Speed at which the mode travels this way, or None if the way is closed to it.
+
+    Bikes are pushed on foot along footways, paths and pedestrian streets (legal
+    almost everywhere, and what people actually do), so those ways stay in the
+    bike graph at walking speed instead of fragmenting it. Steps are closed.
+    """
+    hw = tags.get("highway")
+    if not hw or tags.get("access") == "private":
+        return None
+    if mode == "walk":
+        if hw in NOT_WALKABLE or tags.get("foot") == "no":
+            return None
+        return SPEED_KMH["walk"]
+    if hw in NOT_CYCLABLE or tags.get("bicycle") == "no":
+        return None
+    if hw in FOOT_ONLY and tags.get("bicycle") not in ("yes", "designated", "permissive"):
+        return SPEED_KMH["walk"]
+    return SPEED_KMH[mode]
+
+
+def build_graph(ways: list[dict[str, Any]], mode: str = "walk") -> tuple[dict[int, tuple[float, float]], dict[int, list[tuple[int, float, float]]]]:
+    """Graph for one mode: node id -> (lat, lon); adjacency as (node, metres, minutes)."""
     coords: dict[int, tuple[float, float]] = {}
-    adj: dict[int, list[tuple[int, float]]] = {}
+    adj: dict[int, list[tuple[int, float, float]]] = {}
     for w in ways:
         tags = w.get("tags", {})
-        hw = tags.get("highway")
-        if not hw or hw in NOT_WALKABLE or tags.get("foot") == "no" or tags.get("access") == "private":
+        kmh = edge_speed_kmh(tags, mode)
+        if kmh is None:
             continue
         nodes, geom = w.get("nodes", []), w.get("geometry", [])
         if len(nodes) != len(geom):
@@ -106,8 +129,9 @@ def build_graph(ways: list[dict[str, Any]]) -> tuple[dict[int, tuple[float, floa
         for i in range(len(nodes) - 1):
             a, b = nodes[i], nodes[i + 1]
             d = haversine(coords[a], coords[b])
-            adj.setdefault(a, []).append((b, d))
-            adj.setdefault(b, []).append((a, d))
+            cost = d / (kmh * 1000 / 60)
+            adj.setdefault(a, []).append((b, d, cost))
+            adj.setdefault(b, []).append((a, d, cost))
     return coords, adj
 
 
@@ -136,20 +160,22 @@ def nearest_node(coords: dict[int, tuple[float, float]], pt: tuple[float, float]
     return best, bd
 
 
-def dijkstra(adj: dict[int, list[tuple[int, float]]], src: int) -> tuple[dict[int, float], dict[int, int]]:
-    dist: dict[int, float] = {src: 0.0}
+def dijkstra(adj: dict[int, list[tuple[int, float, float]]], src: int) -> tuple[dict[int, float], dict[int, float], dict[int, int]]:
+    """Fastest path from src. Returns minutes, metres along that path, and predecessors."""
+    mins: dict[int, float] = {src: 0.0}
+    metres: dict[int, float] = {src: 0.0}
     prev: dict[int, int] = {}
     heap = [(0.0, src)]
     while heap:
-        d, u = heapq.heappop(heap)
-        if d > dist.get(u, float("inf")):
+        c, u = heapq.heappop(heap)
+        if c > mins.get(u, float("inf")):
             continue
-        for v, w in adj.get(u, []):
-            nd = d + w
-            if nd < dist.get(v, float("inf")):
-                dist[v], prev[v] = nd, u
-                heapq.heappush(heap, (nd, v))
-    return dist, prev
+        for v, d, w in adj.get(u, []):
+            nc = c + w
+            if nc < mins.get(v, float("inf")):
+                mins[v], metres[v], prev[v] = nc, metres[u] + d, u
+                heapq.heappush(heap, (nc, v))
+    return mins, metres, prev
 
 
 def path_to(prev: dict[int, int], src: int, dst: int) -> list[int]:
@@ -221,11 +247,15 @@ def main() -> None:
     ap.add_argument("--lon", type=float, required=True)
     ap.add_argument("--radius", type=int, default=1800)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--target", action="append", default=[], help='"Label=lat,lon"')
-    ap.add_argument("--target-boundary", action="append", default=[], help='"Label=key=value" nearest reachable point of that area')
+    ap.add_argument("--target", action="append", default=[], help='"Label=lat,lon" or "Label=lat,lon:bike"')
+    ap.add_argument("--target-boundary", action="append", default=[], help='"Label=key=value[:bike]" nearest reachable point of that area')
+    ap.add_argument("--speed", default="", help='override speeds in km/h, e.g. "walk=5,bike=14"')
     ap.add_argument("--area-full", action="append", default=[], help='exact OSM name of a park/area to fetch whole (not clipped by radius)')
     ap.add_argument("--tol", type=float, default=4.0, help="simplification tolerance (m)")
     args = ap.parse_args()
+    for part in filter(None, args.speed.split(",")):
+        k, v = part.split("=")
+        SPEED_KMH[k.strip()] = float(v)
 
     args.out.mkdir(parents=True, exist_ok=True)
     cache = args.out / "overpass.json"
@@ -285,20 +315,37 @@ def main() -> None:
                 layers["green-hero" if hero else "green"].append(poly_d(pts, True))
                 park_polys.append((r["tags"], pts))
 
-    # --- routing ---
-    coords, adj = build_graph(ways)
-    src, snap = nearest_node(coords, (args.lat, args.lon))
-    log.info("graph: %d nodes, house snapped to node at %.0f m", len(coords), snap)
-    dist, prev = dijkstra(adj, src)
+    # --- routing: one graph and one Dijkstra per mode actually requested ---
+    nets: dict[str, tuple[dict, dict, int, dict, dict, dict]] = {}
+    snaps: dict[str, float] = {}
+
+    def net(mode: str) -> tuple[dict, dict, int, dict, dict, dict]:
+        if mode not in SPEED_KMH:
+            raise SystemExit(f"unknown mode {mode!r}: known {sorted(SPEED_KMH)}")
+        if mode not in nets:
+            coords, adj = build_graph(ways, mode)
+            src, snap = nearest_node(coords, (args.lat, args.lon))
+            log.info("%s graph: %d nodes, house snapped to node at %.0f m", mode, len(coords), snap)
+            snaps[mode] = snap
+            mins, dist, prev = dijkstra(adj, src)
+            nets[mode] = (coords, adj, src, dist, prev, mins)
+        return nets[mode]
+
+    def split_mode(spec: str) -> tuple[str, str]:
+        head, _, tail = spec.rpartition(":")
+        return (head, tail) if head and tail in SPEED_KMH else (spec, "walk")
+
 
     routes: list[dict[str, Any]] = []
     for spec in args.target:
+        spec, mode = split_mode(spec)
+        coords, adj, src, dist, prev, mins = net(mode)
         label, ll = spec.split("=", 1)
         tlat, tlon = map(float, ll.split(","))
         dst, dsnap = nearest_node(coords, (tlat, tlon), among=set(dist))
         if dst < 0:
             log.warning("target %s unreachable on the pedestrian graph", label)
-            routes.append({"label": label, "reachable": False, "point": proj.xy(tlat, tlon)})
+            routes.append({"label": label, "mode": mode, "reachable": False, "point": proj.xy(tlat, tlon)})
             continue
         if dsnap > 150:
             log.warning("target %s: nearest reachable node is %.0f m away, so the "
@@ -306,33 +353,37 @@ def main() -> None:
                         "street the pedestrian filter excluded?", label, dsnap)
         pts = [proj.xy(*coords[n]) for n in path_to(prev, src, dst)]
         metres = dist[dst] + dsnap
-        routes.append({"label": label, "reachable": True, "metres": round(metres), "minutes": math.ceil(metres / WALK_M_PER_MIN),
+        total_min = mins[dst] + dsnap / (SPEED_KMH["walk"] * 1000 / 60)
+        routes.append({"label": label, "mode": mode, "reachable": True, "metres": round(metres), "minutes": math.ceil(total_min),
                        "snap_m": round(dsnap), "point": proj.xy(tlat, tlon), "path": simplify(pts, args.tol)})
     for spec in args.target_boundary:
+        spec, mode = split_mode(spec)
+        coords, adj, src, dist, prev, mins = net(mode)
         label, kv = spec.split("=", 1)
         key, val = kv.split("=", 1)
-        # candidate graph nodes within 30 m of any vertex of the matching areas
-        verts: list[tuple[float, float]] = []
-        for tags, pts in park_polys:
-            if tags.get(key) == val and label.split()[-1].lower() in tags.get("name", "").lower():
-                verts.extend(pts)
-        if not verts:
-            log.warning("boundary %s not found", label)
+        cands = [(tags, pts) for tags, pts in park_polys if tags.get(key) == val]
+        named = [(tags, pts) for tags, pts in cands if tags.get("name") in full_names]
+        if named:
+            cands = named
+        if not cands:
+            log.warning("boundary %s: no area with %s=%s in the download", label, key, val)
             continue
+        verts = [v for _, pts in cands for v in pts]
+        # candidate graph nodes within 30 m of any vertex of the matching areas
         best_node, best_d = -1, float("inf")
         for nid, c in coords.items():
-            if nid not in dist:
+            if nid not in mins:
                 continue
             x, y = proj.xy(*c)
             if any(math.hypot(x - vx, y - vy) < 30 for vx, vy in verts):
-                if dist[nid] < best_d:
-                    best_node, best_d = nid, dist[nid]
+                if mins[nid] < best_d:
+                    best_node, best_d = nid, mins[nid]
         if best_node < 0:
             log.warning("no reachable node on boundary of %s", label)
             continue
         pts = [proj.xy(*coords[n]) for n in path_to(prev, src, best_node)]
-        routes.append({"label": label, "reachable": True, "metres": round(best_d), "minutes": math.ceil(best_d / WALK_M_PER_MIN),
-                       "point": pts[-1], "path": simplify(pts, args.tol)})
+        routes.append({"label": label, "mode": mode, "reachable": True, "metres": round(dist[best_node]), "minutes": math.ceil(best_d),
+                       "area": ", ".join(sorted({tg.get("name", "?") for tg, _ in cands})), "point": pts[-1], "path": simplify(pts, args.tol)})
 
     # --- SVG ---
     R = args.radius
@@ -352,7 +403,7 @@ def main() -> None:
     svg.append("</g></svg>")
     (args.out / "map.svg").write_text("\n".join(svg), encoding="utf-8")
 
-    meta = {"house": {"lat": args.lat, "lon": args.lon, "snap_m": round(snap)}, "radius": R, "walk_m_per_min": WALK_M_PER_MIN,
+    meta = {"house": {"lat": args.lat, "lon": args.lon, "snap_m": round(min(snaps.values()) if snaps else 0)}, "radius": R, "speed_kmh": SPEED_KMH,
             "routes": [{k: v for k, v in r.items() if k != "path"} | {"path_points": len(r.get("path", []))} for r in routes],
             "layers": {k: len(v) for k, v in layers.items()}, "attribution": "© OpenStreetMap contributors (ODbL)"}
     (args.out / "map.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -360,7 +411,7 @@ def main() -> None:
     log.info("map.svg %d KB, layers %s", size, meta["layers"])
     for r in routes:
         if r.get("reachable"):
-            log.info("%-22s %5d m  %2d min", r["label"], r["metres"], r["minutes"])
+            log.info("%-22s %5d m  %2d min by %s", r["label"], r["metres"], r["minutes"], r["mode"])
         else:
             log.info("%-22s unreachable", r["label"])
 

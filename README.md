@@ -2,7 +2,7 @@
 
 A real OpenStreetMap map, redrawn in your own style, with the walking routes actually computed.
 
-![Sforza Castle, Milan: Parco Sempione highlighted, the walk to the Duomo drawn](example/preview.png)
+![Sforza Castle, Milan: Parco Sempione highlighted, the walk to the Duomo and the ride to Porta Garibaldi drawn](example/preview.png)
 
 You give it a point and a few destinations. It gives you a layered SVG you can style with CSS and animate with `stroke-dashoffset`, plus a JSON with the distance and the walking minutes to each destination, measured on the real pedestrian network.
 
@@ -10,16 +10,19 @@ You give it a point and a few destinations. It gives you a layered SVG you can s
 
 ```bash
 export OSM_CONTACT="you@example.com"          # the Overpass usage policy asks clients to identify themselves
-python3 osm_walkmap.py --lat 45.4642 --lon 9.1900 --radius 1500 --out out \
-  --target "Central station=45.4863,9.2049" \
-  --target "Sforza Castle=45.4706,9.1795"
+python3 osm_walkmap.py --lat 45.4706 --lon 9.1795 --radius 1800 --tol 8 --out example \
+  --target "Duomo=45.4641,9.1919" \
+  --target "Porta Garibaldi station=45.4848,9.1876:bike" \
+  --target-boundary "Parco Sempione=leisure=park" --area-full "Parco Sempione"
 ```
 
 ```
-INFO graph: 12043 nodes, house snapped to node at 4 m
-INFO map.svg 96 KB, layers {'field': 12, 'green': 88, 'road-major': 74, ...}
-INFO Central station     2612 m  35 min
-INFO Sforza Castle       1338 m  18 min
+INFO walk graph: 42400 nodes, house snapped to node at 22 m
+INFO bike graph: 42546 nodes, house snapped to node at 22 m
+INFO map.svg 560 KB, layers {'green': 767, 'green-hero': 1, 'road-major': 430, 'path': 10064, ...}
+INFO Duomo                   1483 m  20 min by walk
+INFO Porta Garibaldi station 2213 m  11 min by bike
+INFO Parco Sempione           155 m   3 min by walk
 ```
 
 ## Why this exists
@@ -44,13 +47,13 @@ Because the coordinate system is metres, placing a label is arithmetic, not gues
 ```json
 {
   "house": {"lat": 45.61341, "lon": 9.267219, "snap_m": 2},
-  "routes": [{"label": "Primary school", "reachable": true, "metres": 442, "minutes": 6,
+  "routes": [{"label": "Primary school", "mode": "walk", "reachable": true, "metres": 442, "minutes": 6,
               "point": [172.1, 97.9], "path_points": 6}],
   "attribution": "© OpenStreetMap contributors (ODbL)"
 }
 ```
 
-The `example/` folder holds the output of the command above, run from the Sforza Castle in Milan. A dense city centre is the worst case for size: 5,800 footpaths make a 330 KB SVG. A town is closer to 100 KB. Raise `--tol` if you need it smaller.
+The `example/` folder holds the output of the command above, run from the Sforza Castle in Milan. A dense city centre is the worst case for size: ten thousand footpaths make a 560 KB SVG even at `--tol 8`. A town is closer to 100 KB.
 
 **`overpass.json`** is the cached raw response. Re-running is free and does not hit the API again; delete it to refresh.
 
@@ -75,14 +78,15 @@ One warning learned the hard way: if your stylesheet sets `stroke-dasharray` wit
 | `--lat --lon` | the point everything is measured from. Required |
 | `--radius` | metres of map to download around it (default 1800) |
 | `--out` | output directory |
-| `--target "Label=lat,lon"` | a destination. Repeatable |
+| `--target "Label=lat,lon"` | a destination. Repeatable. Append `:bike` to route it by bicycle |
 | `--target-boundary "Label=key=value"` | a destination that is an **area**: the route ends at the nearest reachable point of its boundary, not its centroid. For a large park that is the difference between an honest number and a misleading one |
 | `--area-full "Exact name"` | fetch that area whole even if it extends past the radius, so a big park is not drawn as clipped shards. It also gets its own `green-hero` layer |
 | `--tol` | simplification tolerance in metres (default 4). This is what keeps the SVG around 100 KB instead of 2 MB |
+| `--speed "walk=4.5,bike=15"` | speeds in km/h, if the defaults do not fit your audience |
 
 Destinations are snapped to the nearest **reachable** node of the graph, not simply the nearest one: a clipped fragment at the edge of the download would otherwise make a perfectly walkable target look unreachable. If that snap is more than 150 m the tool warns you, because it usually means the target sits outside `--radius`.
 
-Walking speed is 75 m/min (4.5 km/h), minutes rounded up.
+Two modes, each with its own graph. **Walk** (4.5 km/h) uses everything but motorways and ways tagged `foot=no`. **Bike** (15 km/h) drops steps and footways unless they carry `bicycle=yes`, so a cycling route is not just the walking route at a higher speed: it can be longer and still faster. Minutes are rounded up.
 
 ## What it deliberately does not do
 

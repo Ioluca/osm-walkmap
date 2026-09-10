@@ -4,11 +4,15 @@
     "lon": 9.1795,
     "snap_m": 22
   },
-  "radius": 1400,
-  "walk_m_per_min": 75.0,
+  "radius": 1800,
+  "speed_kmh": {
+    "walk": 4.5,
+    "bike": 15.0
+  },
   "routes": [
     {
       "label": "Duomo",
+      "mode": "walk",
       "reachable": true,
       "metres": 1483,
       "minutes": 20,
@@ -17,13 +21,28 @@
         968.0177899622626,
         723.5799999995002
       ],
-      "path_points": 21
+      "path_points": 14
+    },
+    {
+      "label": "Porta Garibaldi station",
+      "mode": "bike",
+      "reachable": true,
+      "metres": 2213,
+      "minutes": 11,
+      "snap_m": 15,
+      "point": [
+        632.3342015075444,
+        -1580.7440000002707
+      ],
+      "path_points": 27
     },
     {
       "label": "Parco Sempione",
+      "mode": "walk",
       "reachable": true,
       "metres": 155,
       "minutes": 3,
+      "area": "Parco Sempione",
       "point": [
         85.2870512526182,
         122.22935999988124
@@ -32,16 +51,16 @@
     }
   ],
   "layers": {
-    "field": 0,
-    "green": 394,
+    "field": 2,
+    "green": 767,
     "green-hero": 1,
-    "water": 9,
-    "rail": 567,
-    "road-service": 436,
-    "path": 5866,
-    "road-minor": 1403,
-    "road-mid": 223,
-    "road-major": 183
+    "water": 26,
+    "rail": 1034,
+    "road-service": 877,
+    "path": 10064,
+    "road-minor": 2343,
+    "road-mid": 384,
+    "road-major": 430
   },
   "attribution": "© OpenStreetMap contributors (ODbL)"
 }
