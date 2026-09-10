@@ -1,0 +1,47 @@
+{
+  "house": {
+    "lat": 45.4706,
+    "lon": 9.1795,
+    "snap_m": 22
+  },
+  "radius": 1400,
+  "walk_m_per_min": 75.0,
+  "routes": [
+    {
+      "label": "Duomo",
+      "reachable": true,
+      "metres": 1483,
+      "minutes": 20,
+      "snap_m": 46,
+      "point": [
+        968.0177899622626,
+        723.5799999995002
+      ],
+      "path_points": 21
+    },
+    {
+      "label": "Parco Sempione",
+      "reachable": true,
+      "metres": 155,
+      "minutes": 3,
+      "point": [
+        85.2870512526182,
+        122.22935999988124
+      ],
+      "path_points": 2
+    }
+  ],
+  "layers": {
+    "field": 0,
+    "green": 394,
+    "green-hero": 1,
+    "water": 9,
+    "rail": 567,
+    "road-service": 436,
+    "path": 5866,
+    "road-minor": 1403,
+    "road-mid": 223,
+    "road-major": 183
+  },
+  "attribution": "© OpenStreetMap contributors (ODbL)"
+}

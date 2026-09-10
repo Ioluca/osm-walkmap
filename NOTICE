@@ -1,0 +1,10 @@
+osm-walkmap
+Copyright (c) 2026 Luca Cazzaniga
+Licensed under the MIT License (see LICENSE).
+
+This software retrieves data from the OpenStreetMap project.
+Map data © OpenStreetMap contributors, licensed under the ODbL.
+https://www.openstreetmap.org/copyright
+
+Any map, image or video produced from this tool's output must display that
+attribution.
