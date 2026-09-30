@@ -429,6 +429,10 @@ def main() -> None:
         key, val = kv.split("=", 1)
         cands = [(tags, pts) for tags, pts in park_polys if tags.get(key) == val]
         named = [(tags, pts) for tags, pts in cands if tags.get("name") in full_names]
+        if not named:
+            # without --area-full, prefer areas whose name is the label itself: otherwise any small
+            # unnamed park next door would win and the minutes on screen would be false
+            named = [(tags, pts) for tags, pts in cands if tags.get("name") == label]
         if named:
             cands = named
         if not cands:

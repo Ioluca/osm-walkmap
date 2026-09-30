@@ -89,7 +89,7 @@ The example is live at **[ioluca.github.io/osm-walkmap/example/demo.html](https:
 | `--radius` | metres of map to download around it (default 1800) |
 | `--out` | output directory |
 | `--target "Label=lat,lon"` | a destination. Repeatable. Append `:bike` to route it by bicycle |
-| `--target-boundary "Label=key=value"` | a destination that is an **area**: the route ends at the nearest reachable point of its boundary, not its centroid. For a large park that is the difference between an honest number and a misleading one |
+| `--target-boundary "Label=key=value"` | a destination that is an **area**: the route ends at the nearest reachable point of its boundary, not its centroid. For a large park that is the difference between an honest number and a misleading one. If an area in the download is named exactly like the label, that one is used; otherwise any area with that tag counts, so name the label after the place you mean |
 | `--area-full "Exact name"` | fetch that area whole even if it extends past the radius, so a big park is not drawn as clipped shards. It also gets its own `green-hero` layer |
 | `--tol` | simplification tolerance in metres (default 4). This is what keeps the SVG around 100 KB instead of 2 MB |
 | `--speed "walk=4.5,bike=15"` | speeds in km/h, if the defaults do not fit your audience |
